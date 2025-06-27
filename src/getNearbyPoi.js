@@ -67,20 +67,7 @@ export async function getNearbyPlaces(lat, lon) {
     hotel: [],
   };
 
-  let IsochronePolygon = [];
-  try {
-    const mapboxIsochroneRes = await axios.get(
-      `https://api.mapbox.com/isochrone/v1/mapbox/walking/${lon}%2C${lat}?contours_minutes=30&polygons=true&denoise=1&generalize=300&access_token=${process.env.MAPBOX_ACCESS_TOKEN}`
-    );
-    const mapboxIsochrone = mapboxIsochroneRes.data.features[0];
-    IsochronePolygon = mapboxIsochrone.geometry.coordinates[0];
-  } catch (error) {
-    console.error("Error getting mapbox isochrone:", error);
-    return {
-      error: "Error getting mb isochrone:" + error,
-    };
-  }
-  // Fetch POIs from Geoapify API within 5km radius
+  // Fetch POIs from Geoapify API within 3km radius
   const geoApifyPOIRes = await axios.get(
     `https://api.geoapify.com/v2/places?` +
       `categories=commercial.supermarket,healthcare.pharmacy,catering.restaurant,` +
@@ -96,7 +83,21 @@ export async function getNearbyPlaces(lat, lon) {
     return geoApifyPOIRes.data;
   }
 
-  // Get 40-minute walking distance polygon from Mapbox Isochrone API
+  // Get 30-minute walking distance polygon from Mapbox Isochrone API
+  let IsochronePolygon = [];
+  try {
+    const mapboxIsochroneRes = await axios.get(
+      `https://api.mapbox.com/isochrone/v1/mapbox/walking/${lon}%2C${lat}?contours_minutes=30&polygons=true&denoise=1&generalize=300&access_token=${process.env.MAPBOX_ACCESS_TOKEN}`
+    );
+    const mapboxIsochrone = mapboxIsochroneRes.data.features[0];
+    IsochronePolygon = mapboxIsochrone.geometry.coordinates[0];
+  } catch (error) {
+    console.error("Error getting mapbox isochrone:", error);
+    return {
+      error: "Error getting mb isochrone:" + error,
+    };
+  }
+
 
   // Filter POIs to only include those within walking distance
   const filteredPOI = geoApifyPOIRes.data.features.filter((poi) =>
