@@ -46,11 +46,46 @@ mongoClient
 const app = express();
 app.use(express.json());
 
+function getRealClientIP(req) {
+  // Vercel passes real IP in x-forwarded-for
+  const forwarded = req.headers["x-forwarded-for"];
+  if (forwarded) {
+    return forwarded.split(",")[0].trim();
+  }
+
+  return req.headers["x-real-ip"] || requestIp.getClientIp(req);
+}
+
+// Middleware
+app.use((req, res, next) => {
+  const referer = req.get("Referer");
+  const origin = req.get("Origin");
+  const userAgent = req.get("User-Agent");
+
+  // allow requests from frontend part(or vite dev server trough allowed domain)
+  const allowedDomain =
+    process.env.ALLOWED_DOMAIN || "https://mapsy-theta.vercel.app";
+
+  // check if request comes from allowed domain
+  if (
+    req.path !== "/" &&
+    (!referer || !referer.startsWith(allowedDomain)) &&
+    (!origin || origin !== allowedDomain)
+  ) {
+    return res.status(403).json({
+      error: "Access denied. Requests must come from the authorized domain.",
+      code: "UNAUTHORIZED_DOMAIN",
+    });
+  }
+  next();
+});
+
 // only allow requests from frontend part
 app.use(
   cors({
-    origin: "https://mapsy-theta.vercel.app",
+    origin: process.env.ALLOWED_DOMAIN || "https://mapsy-theta.vercel.app",
     credentials: true,
+    optionsSuccessStatus: 200,
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
@@ -98,12 +133,11 @@ function roundCord(coord, precision) {
 
 //* main route
 app.get("/nearby-places", async (req, res) => {
-  const ip = requestIp.getClientIp(req);
+  const ip = getRealClientIP(req);
   const lat = parseFloat(req.query.lat);
   const lon = parseFloat(req.query.lon);
   const roundedLat = roundCord(lat, 3);
   const roundedLon = roundCord(lon, 3);
-  //? no need to check if lat/lon are valid, they're not user input
 
   //! 2 layer cache to minimize api key usage
   const cacheKey = `nearby-${roundedLat}-${roundedLon}`;
@@ -112,7 +146,7 @@ app.get("/nearby-places", async (req, res) => {
   const cachedData = await redisClient.get(cacheKey);
   if (cachedData) {
     console.log("Cache hit");
-    res.json(JSON.parse(cachedData));
+    res.status(200).json(JSON.parse(cachedData));
     return;
   }
 
@@ -128,7 +162,7 @@ app.get("/nearby-places", async (req, res) => {
     await redisClient.set(cacheKey, JSON.stringify(mdbData), {
       EX: 60 * 60 * 6, // set redis cache for quick access
     });
-    res.json(mdbData);
+    res.status(200).json(mdbData);
     return;
   }
 
@@ -153,7 +187,7 @@ app.get("/nearby-places", async (req, res) => {
     if (sortedPoi.error) {
       return res.status(500).json({
         error: sortedPoi.error,
-        code: "API_CREDITS_EXCEEDED",
+        code: "API_ERROR",
       });
     }
     const nearbyPlaces = {
@@ -175,7 +209,7 @@ app.get("/nearby-places", async (req, res) => {
       createdAt: new Date(),
       expiresAt: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000), // expires in 4 days
     });
-    res.json(nearbyPlaces);
+    res.status(200).json(nearbyPlaces);
   } catch (error) {
     console.error("Error:", error);
     res.status(500).json({ error: "Internal server error" });

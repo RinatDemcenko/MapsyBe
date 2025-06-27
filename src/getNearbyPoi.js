@@ -34,14 +34,19 @@ export function pointInPolygon(point, polygon) {
  */
 export function sortByCategory(poi, poiCategories, appendTo) {
   if (poiCategories.includes("commercial.supermarket")) {
+    poi.properties.categories.push("supermarket");
     appendTo.supermarket.push(poi);
   } else if (poiCategories.includes("healthcare.pharmacy")) {
+    poi.properties.categories.push("pharmacy");
     appendTo.pharmacy.push(poi);
   } else if (poiCategories.includes("catering.restaurant")) {
+    poi.properties.categories.push("restaurant");
     appendTo.restaurant.push(poi);
   } else if (poiCategories.includes("catering.fast_food")) {
+    poi.properties.categories.push("fastfood");
     appendTo.fastfood.push(poi);
   } else if (poiCategories.includes("accommodation.hotel")) {
+    poi.properties.categories.push("hotel");
     appendTo.hotel.push(poi);
   }
 }
@@ -62,6 +67,19 @@ export async function getNearbyPlaces(lat, lon) {
     hotel: [],
   };
 
+  let IsochronePolygon = [];
+  try {
+    const mapboxIsochroneRes = await axios.get(
+      `https://api.mapbox.com/isochrone/v1/mapbox/walking/${lon}%2C${lat}?contours_minutes=40&polygons=true&denoise=1&generalize=300&access_token=${process.env.MAPBOX_ACCESS_TOKEN}`
+    );
+    const mapboxIsochrone = mapboxIsochroneRes.data.features[0];
+    IsochronePolygon = mapboxIsochrone.geometry.coordinates[0];
+  } catch (error) {
+    console.error("Error getting mapbox isochrone:", error);
+    return {
+      error: "Error getting mb isochrone:" + error,
+    };
+  }
   // Fetch POIs from Geoapify API within 5km radius
   const geoApifyPOIRes = await axios.get(
     `https://api.geoapify.com/v2/places?` +
@@ -75,17 +93,10 @@ export async function getNearbyPlaces(lat, lon) {
 
   // Check if API limit is not exceeded
   if (!geoApifyPOIRes.data.features) {
-    return {
-      error: "api credits exceeded",
-    };
+    return geoApifyPOIRes.data;
   }
 
   // Get 40-minute walking distance polygon from Mapbox Isochrone API
-  const mapboxIsochroneRes = await axios.get(
-    `https://api.mapbox.com/isochrone/v1/mapbox/walking/${lon}%2C${lat}?contours_minutes=40&polygons=true&denoise=1&generalize=300&access_token=${process.env.MAPBOX_ACCESS_TOKEN}`
-  );
-  const mapboxIsochrone = mapboxIsochroneRes.data.features[0];
-  const IsochronePolygon = mapboxIsochrone.geometry.coordinates[0];
 
   // Filter POIs to only include those within walking distance
   const filteredPOI = geoApifyPOIRes.data.features.filter((poi) =>
@@ -98,3 +109,4 @@ export async function getNearbyPlaces(lat, lon) {
   });
   return sortedPOI;
 }
+
