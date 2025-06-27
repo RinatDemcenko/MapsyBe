@@ -70,7 +70,7 @@ export async function getNearbyPlaces(lat, lon) {
   let IsochronePolygon = [];
   try {
     const mapboxIsochroneRes = await axios.get(
-      `https://api.mapbox.com/isochrone/v1/mapbox/walking/${lon}%2C${lat}?contours_minutes=40&polygons=true&denoise=1&generalize=300&access_token=${process.env.MAPBOX_ACCESS_TOKEN}`
+      `https://api.mapbox.com/isochrone/v1/mapbox/walking/${lon}%2C${lat}?contours_minutes=30&polygons=true&denoise=1&generalize=300&access_token=${process.env.MAPBOX_ACCESS_TOKEN}`
     );
     const mapboxIsochrone = mapboxIsochroneRes.data.features[0];
     IsochronePolygon = mapboxIsochrone.geometry.coordinates[0];
@@ -87,7 +87,7 @@ export async function getNearbyPlaces(lat, lon) {
       `catering.fast_food,accommodation.hotel&` +
       `filter=circle:${lon},${lat},5000&` +
       `bias=proximity:${lon},${lat}&` +
-      `limit=40&` +
+      `limit=60&` +
       `apiKey=${process.env.GEOAPIFY_PLACES_KEY}`
   );
 
