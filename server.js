@@ -56,14 +56,12 @@ async function connectToDatabase() {
 const app = express();
 app.use(express.json());
 
-function getRealClientIP(req) {
-  // Vercel passes real IP in x-forwarded-for
-  const forwarded = req.headers["x-forwarded-for"];
-  if (forwarded) {
-    return forwarded.split(",")[0].trim();
-  }
+// Trust proxy for deployment platforms like Vercel, Heroku, etc.
+app.set("trust proxy", true);
 
-  return req.headers["x-real-ip"] || requestIp.getClientIp(req);
+function getRealClientIP(req) {
+  // With trust proxy enabled, req.ip will contain the real client IP
+  return req.ip || requestIp.getClientIp(req);
 }
 
 // Middleware
