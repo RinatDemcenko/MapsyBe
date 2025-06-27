@@ -27,21 +27,31 @@ redisClient
     console.log(err);
   });
 
-const mongoClient = new MongoClient(process.env.MONGO_URI, {
-  serverApi: {
-    version: ServerApiVersion.v1,
-    strict: true,
-    deprecationErrors: true,
-  },
-});
-mongoClient
-  .connect()
-  .then(() => {
-    console.log("MongoDB connected");
-  })
-  .catch((err) => {
-    console.log(err);
+// MongoDB connection with proper serverless caching
+let cachedClient = null;
+let cachedDb = null;
+
+async function connectToDatabase() {
+  if (cachedClient && cachedDb) {
+    return { client: cachedClient, db: cachedDb };
+  }
+
+  const client = new MongoClient(process.env.MONGO_URI, {
+    serverApi: {
+      version: ServerApiVersion.v1,
+      strict: true,
+      deprecationErrors: true,
+    },
   });
+
+  await client.connect();
+  const db = client.db("PlacesData");
+
+  cachedClient = client;
+  cachedDb = db;
+
+  return { client, db };
+}
 
 const app = express();
 app.use(express.json());
@@ -151,19 +161,23 @@ app.get("/nearby-places", async (req, res) => {
   }
 
   // check mongodb only if there is no data in redis
-  const mongodbCacheCollection = mongoClient
-    .db("PlacesData")
-    .collection("savedPlaces");
-  const mdbData = await mongodbCacheCollection.findOne({
-    generalCoordinates: [roundedLat, roundedLon],
-  });
-  if (mdbData) {
-    console.log("MongoDB hit");
-    await redisClient.set(cacheKey, JSON.stringify(mdbData), {
-      EX: 60 * 60 * 6, // set redis cache for quick access
+  try {
+    const { db } = await connectToDatabase();
+    const mongodbCacheCollection = db.collection("savedPlaces");
+    const mdbData = await mongodbCacheCollection.findOne({
+      generalCoordinates: [roundedLat, roundedLon],
     });
-    res.status(200).json(mdbData);
-    return;
+    if (mdbData) {
+      console.log("MongoDB hit");
+      await redisClient.set(cacheKey, JSON.stringify(mdbData), {
+        EX: 60 * 60 * 6, // set redis cache for quick access
+      });
+      res.status(200).json(mdbData);
+      return;
+    }
+  } catch (mongoError) {
+    console.error("MongoDB error during cache check:", mongoError);
+    // Continue without MongoDB cache if there's an error
   }
 
   try {
@@ -202,13 +216,20 @@ app.get("/nearby-places", async (req, res) => {
     });
 
     // save to mongodb
-    const generalizedPlaces = { ...nearbyPlaces };
-    generalizedPlaces.generalCoordinates = [roundedLat, roundedLon];
-    await mongodbCacheCollection.insertOne({
-      ...generalizedPlaces,
-      createdAt: new Date(),
-      expiresAt: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000), // expires in 4 days
-    });
+    try {
+      const { db } = await connectToDatabase();
+      const mongodbCacheCollection = db.collection("savedPlaces");
+      const generalizedPlaces = { ...nearbyPlaces };
+      generalizedPlaces.generalCoordinates = [roundedLat, roundedLon];
+      await mongodbCacheCollection.insertOne({
+        ...generalizedPlaces,
+        createdAt: new Date(),
+        expiresAt: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000), // expires in 4 days
+      });
+    } catch (mongoError) {
+      console.error("MongoDB error during save:", mongoError);
+      // Continue even if MongoDB save fails
+    }
     res.status(200).json(nearbyPlaces);
   } catch (error) {
     console.error("Error:", error);
