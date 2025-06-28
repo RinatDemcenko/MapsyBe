@@ -36,6 +36,9 @@ export function sortByCategory(poi, poiCategories, appendTo) {
   if (poiCategories.includes("commercial.supermarket")) {
     poi.properties.categories.push("supermarket");
     appendTo.supermarket.push(poi);
+  } else if (poiCategories.includes("commercial.marketplace")) {
+    poi.properties.categories.push("marketplace");
+    appendTo.marketplace.push(poi);
   } else if (poiCategories.includes("healthcare.pharmacy")) {
     poi.properties.categories.push("pharmacy");
     appendTo.pharmacy.push(poi);
@@ -61,6 +64,7 @@ export async function getNearbyPlaces(lat, lon) {
   // Initialize object to store categorized POIs
   const sortedPOI = {
     supermarket: [],
+    marketplace: [],
     pharmacy: [],
     restaurant: [],
     fastfood: [],
@@ -70,7 +74,7 @@ export async function getNearbyPlaces(lat, lon) {
   // Fetch POIs from Geoapify API within 3km radius
   const geoApifyPOIRes = await axios.get(
     `https://api.geoapify.com/v2/places?` +
-      `categories=commercial.supermarket,healthcare.pharmacy,catering.restaurant,` +
+      `categories=commercial.supermarket,commercial.marketplace,healthcare.pharmacy,catering.restaurant,` +
       `catering.fast_food,accommodation.hotel&` +
       `filter=circle:${lon},${lat},5000&` +
       `bias=proximity:${lon},${lat}&` +
@@ -110,4 +114,3 @@ export async function getNearbyPlaces(lat, lon) {
   });
   return sortedPOI;
 }
-
